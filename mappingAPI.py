@@ -1,4 +1,5 @@
 import json
+from random import sample
 import sys
 from urllib.request import urlopen
 import configparser
@@ -20,6 +21,7 @@ def readIni(configPath):
 			dictConfig[section][key] = config[section][key]
 	return dictConfig
 
+
 # Extract Clinical Data from Patients and Samples
 def retrieveAPIData(configVariables, studyId, patientORsample, outputFile):
 	if patientORsample =='patients':
@@ -30,6 +32,12 @@ def retrieveAPIData(configVariables, studyId, patientORsample, outputFile):
 	samplePatientIdsJson = f"https://www.cbioportal.org/api/studies/{studyId}/{patientORsample}"
 	response = urlopen(samplePatientIdsJson)
 	samplePatientIdsJson = json.loads(response.read())
+	
+	dictMappingPatientSample = {}
+	if patientORsample =='samples':
+		for sampleEntry in samplePatientIdsJson:
+			dictMappingPatientSample[sampleEntry['sampleId']] = [sampleEntry['patientId']]
+	
 	# Extract Sample or Patient data
 	listSamplePatients = [] # List of all patient or sample data
 	for samplePatientId in samplePatientIdsJson:					# For each sampleId or patientId
@@ -45,12 +53,14 @@ def retrieveAPIData(configVariables, studyId, patientORsample, outputFile):
 			dictSamplePatientId[configVariable] = dataJson[0]["value"]
 		listSamplePatients.append(dictSamplePatientId)
 	# Write info to a file
-	f = open(outputFile, 'w')
-	f.write(str(listSamplePatients))
-	f.close()
+	# f = open(outputFile, 'w')
+	# f.write(str(listSamplePatients))
+	# f.close()
+	return listSamplePatients, dictMappingPatientSample
+
 
 # Extract Mutation data
-def retrieveGenomicVariants(studyId, outputFile):
+def retrieveGenomicVariants(studyId):
 	# List of variables used in Beacon
 	listInfoGenomicVariants = ['mutationType', 'proteinChange', 'ncbiBuild',
 	 'chr', 'startPosition', 'endPosition', 'entrezGeneId', 'mutationStatus',
@@ -82,12 +92,77 @@ def retrieveGenomicVariants(studyId, outputFile):
 		for molecularData in listMolecularData:		# For all the entries having a mutation
 			dictGenomicVariant = {}					# Dict for storing data of each mutation object
 			for infoGenomicVariant in listInfoGenomicVariants:	# For all variables that can map with Beacon
+				if not infoGenomicVariant in molecularData:
+					continue
 				dictGenomicVariant[infoGenomicVariant] = molecularData[infoGenomicVariant] # Store the info in the dict
 			listGenomicVariants.append(dictGenomicVariant)
+	return listGenomicVariants
+
+
+def writeGenomicsFile(listGenomicData):
+	listDictGenomics = []
+	# Genomic Variants file
+	for genomicData in listGenomicData:
+		dictGenomicData = {}
+		dictGenomicData['_position'] = {'start':[int(genomicData['startPosition'])],
+			 'startInteger':int(genomicData['startPosition']),
+			 'end':[int(genomicData['endPosition'])],
+			 'endInteger':int(genomicData['endPosition']),
+			 'refseqId': genomicData['chr'],
+			 'assemblyID': genomicData['ncbiBuild']}
+		dictGenomicData['caseLevelData'] = [{'individualId': genomicData['patientId'], 'biosamplelId': genomicData['sampleId']}]
+		if 'mutationStatus' in genomicData:
+			dictGenomicData['caseLevelData'] += [{'alleleOrigin':{'label':genomicData['mutationStatus']}}]
+
+		dictGenomicData['variation'] = {'alternateBases': genomicData['variantAllele'],
+			'referenceBases': genomicData['referenceAllele'],
+			'location':{'interval': {'end': {'value':int(genomicData['startPosition']), 'type':'Number'},
+			 	'start':{'value': int(genomicData['endPosition']), 'type': 'Number'}}}
+			 }
+		if 'mutationType' in genomicData:
+			dictGenomicData['variantLevelData'] = {'phenotypicEffects': {'category': genomicData['mutationType']}}
+		if 'proteinChange' in genomicData:
+			dictGenomicData['proteinHGVSIds'] = [genomicData['proteinChange']]
+		if 'entrezGeneId' in genomicData:
+			dictGenomicData['molecularAttributes'] = {'geneIds': [genomicData['entrezGeneId']]}
+		listDictGenomics.append(dictGenomicData)
+	# for patientData in listPatientData:
+	# 	patientId = dictMappingPatientSample[patientData['patientId']]
 	# Write info to a file
-	f = open(outputFile, 'w')
-	f.write(str(listGenomicVariants))
+	f = open('genomic.json', 'w')
+	f.write(json.dumps(listDictGenomics, indent=1))
 	f.close()
+
+def writeIndividualSampleFile(listPatientData, listSampleData, dictMappingPatientSample):
+	listDictSampleData = []
+	dictDiseasePatient = {}
+	for sampleData in listSampleData:
+		dictSampleData = {}
+		dictSampleData['id'] = sampleData['sampleId']
+		dictSampleData['individualId'] = dictMappingPatientSample[sampleData['sampleId']]
+		dictSampleData['PhenotypicFeature'] = {'featureType':{'label': sampleData['phenotypicfeature']}}
+		dictSampleData['tumorProgression'] = {'label': sampleData['tumorprogression']}
+		dictDiseasePatient[sampleData['sampleId']] = sampleData['phenotypicfeature']
+		listDictSampleData.append(dictSampleData)
+	f = open('biosample.json', 'w')
+	f.write(json.dumps(listDictSampleData, indent=1))
+	f.close()
+
+	listIndividualData = []
+	for individualData in listPatientData:
+		dictIndividualData = {}
+		dictIndividualData['id'] = individualData['patientId']
+
+		dictIndividualData['sex'] = {'label': individualData['sex']}
+		if 'ethnicity' in individualData:
+			dictIndividualData['ethnicity'] = {'label': individualData['ethnicity']}
+		if 'age' in individualData:
+			dictIndividualData['disease'] = {'ageOfOnset': {'Age': individualData['age']},'diseaseCode':{'label': dictDiseasePatient[individualData['patientId']]}}
+		listIndividualData.append(dictIndividualData)
+	f = open('individual.json', 'w')
+	f.write(json.dumps(listIndividualData, indent=1))
+	f.close()
+
 
 def main():
 	# Read config file
@@ -98,17 +173,20 @@ def main():
 	outputFileIndividuals = dictConfig['Main Config']['outputindividuals']
 	outputFileBiosample = dictConfig['Main Config']['outputbiosamples']
 	outputFileGenomicVariants = dictConfig['Main Config']['outputgenomicvariants']
-
-	# Extract Patient Data
+	listPatientData = []
+	listSampleData = []
+	listGenomicData = []
+	dictMappingPatientSample = {}
+	# # Extract Patient Data
 	if dictConfig['Patient Data']:
-		retrieveAPIData(dictConfig['Patient Data'], studyId, 'patients', outputFileIndividuals)
-	
-	# Extract Sample Data
+		listPatientData, _ = retrieveAPIData(dictConfig['Patient Data'], studyId, 'patients', outputFileIndividuals)
+	# # Extract Sample Data
 	if dictConfig['Sample Data']:
-		retrieveAPIData(dictConfig['Sample Data'], studyId, 'samples', outputFileBiosample)
-	
+		listSampleData, dictMappingPatientSample = retrieveAPIData(dictConfig['Sample Data'], studyId, 'samples', outputFileBiosample)
 	# Extract Genomic Variants Data
-	retrieveGenomicVariants(studyId, outputFileGenomicVariants)
+	# listGenomicData = retrieveGenomicVariants(studyId)
+	# writeGenomicsFile( listGenomicData)
+	writeIndividualSampleFile(listPatientData, listSampleData, dictMappingPatientSample)
 
 
 if __name__ == '__main__':
