@@ -184,8 +184,8 @@ def main():
 	if dictConfig['Sample Data']:
 		listSampleData, dictMappingPatientSample = retrieveAPIData(dictConfig['Sample Data'], studyId, 'samples', outputFileBiosample)
 	# Extract Genomic Variants Data
-	# listGenomicData = retrieveGenomicVariants(studyId)
-	# writeGenomicsFile( listGenomicData)
+	listGenomicData = retrieveGenomicVariants(studyId)
+	writeGenomicsFile( listGenomicData)
 	writeIndividualSampleFile(listPatientData, listSampleData, dictMappingPatientSample)
 
 
