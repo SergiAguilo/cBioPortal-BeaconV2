@@ -23,7 +23,7 @@ def readIni(configPath):
 
 
 # Extract Clinical Data from Patients and Samples
-def retrieveAPIData(configVariables, studyId, patientORsample, outputFile):
+def retrieveAPIData(configVariables, studyId, patientORsample):
 	if patientORsample =='patients':
 		patientORsampleId = 'patientId'
 	else:
@@ -52,10 +52,6 @@ def retrieveAPIData(configVariables, studyId, patientORsample, outputFile):
 				continue
 			dictSamplePatientId[configVariable] = dataJson[0]["value"]
 		listSamplePatients.append(dictSamplePatientId)
-	# Write info to a file
-	# f = open(outputFile, 'w')
-	# f.write(str(listSamplePatients))
-	# f.close()
 	return listSamplePatients, dictMappingPatientSample
 
 
@@ -99,7 +95,7 @@ def retrieveGenomicVariants(studyId):
 	return listGenomicVariants
 
 
-def writeGenomicsFile(listGenomicData):
+def writeGenomicsFile(listGenomicData, outputFileGenomicVariants):
 	listDictGenomics = []
 	# Genomic Variants file
 	for genomicData in listGenomicData:
@@ -126,43 +122,56 @@ def writeGenomicsFile(listGenomicData):
 		if 'entrezGeneId' in genomicData:
 			dictGenomicData['molecularAttributes'] = {'geneIds': [genomicData['entrezGeneId']]}
 		listDictGenomics.append(dictGenomicData)
-	# for patientData in listPatientData:
-	# 	patientId = dictMappingPatientSample[patientData['patientId']]
 	# Write info to a file
-	f = open('genomic.json', 'w')
+	f = open(outputFileGenomicVariants, 'w')
 	f.write(json.dumps(listDictGenomics, indent=1))
 	f.close()
 
-def writeIndividualSampleFile(listPatientData, listSampleData, dictMappingPatientSample):
-	listDictSampleData = []
-	dictDiseasePatient = {}
-	for sampleData in listSampleData:
-		dictSampleData = {}
-		dictSampleData['id'] = sampleData['sampleId']
-		dictSampleData['individualId'] = dictMappingPatientSample[sampleData['sampleId']]
-		dictSampleData['PhenotypicFeature'] = {'featureType':{'label': sampleData['phenotypicfeature']}}
-		dictSampleData['tumorProgression'] = {'label': sampleData['tumorprogression']}
-		dictDiseasePatient[sampleData['sampleId']] = sampleData['phenotypicfeature']
-		listDictSampleData.append(dictSampleData)
-	f = open('biosample.json', 'w')
-	f.write(json.dumps(listDictSampleData, indent=1))
-	f.close()
+# Recursive function to add dot separated strings as dictionary
+# Ex: sex.label = Male -> {"sex":{"label": "Male"}}
+def add_branch(tree, vector, value):
+	key = vector[0]
+	if len(vector) ==0:
+		tree[key] = value
+		return tree
+	tree[key] = value \
+		if len(vector) == 1 \
+		else add_branch(tree[key] if key in tree else {},
+						vector[1:],
+						value)
+	return tree
 
+def writeIndividualFile(listPatientData, outputFileIndividuals):
 	listIndividualData = []
 	for individualData in listPatientData:
 		dictIndividualData = {}
-		dictIndividualData['id'] = individualData['patientId']
+		for patientVariable in individualData:
+			if patientVariable == 'patientId':
+				dictIndividualData['id'] = individualData['patientId']
+			else:
 
-		dictIndividualData['sex'] = {'label': individualData['sex']}
-		if 'ethnicity' in individualData:
-			dictIndividualData['ethnicity'] = {'label': individualData['ethnicity']}
-		if 'age' in individualData:
-			dictIndividualData['disease'] = {'ageOfOnset': {'Age': individualData['age']},'diseaseCode':{'label': dictDiseasePatient[individualData['patientId']]}}
+				dictIndividualData = add_branch(dictIndividualData, patientVariable.split("."), individualData[patientVariable])
+
 		listIndividualData.append(dictIndividualData)
-	f = open('individual.json', 'w')
-	f.write(json.dumps(listIndividualData, indent=1))
-	f.close()
+		f = open(outputFileIndividuals, 'w')
+		f.write(json.dumps(listIndividualData, indent=1))
+		f.close()
 
+
+def writeSampleFile(listSampleData, dictMappingPatientSample, outputFileBiosample):
+	listDictSampleData = []
+	for sampleData in listSampleData:
+		dictSampleData = {}
+		for sampleVariable in sampleData:
+			if sampleVariable == 'patientId':
+				dictSampleData['id'] = sampleData['sampleId']
+				dictSampleData['individualId'] = dictMappingPatientSample[sampleData['sampleId']]
+			else:
+				dictSampleData = add_branch(dictSampleData, sampleVariable.split("."), sampleData[sampleVariable])
+		listDictSampleData.append(dictSampleData)
+	f = open(outputFileBiosample, 'w')
+	f.write(json.dumps(listDictSampleData, indent=1))
+	f.close()
 
 def main():
 	# Read config file
@@ -177,16 +186,17 @@ def main():
 	listSampleData = []
 	listGenomicData = []
 	dictMappingPatientSample = {}
-	# # Extract Patient Data
+	# Extract Patient Data
 	if dictConfig['Patient Data']:
-		listPatientData, _ = retrieveAPIData(dictConfig['Patient Data'], studyId, 'patients', outputFileIndividuals)
-	# # Extract Sample Data
+		listPatientData, _ = retrieveAPIData(dictConfig['Patient Data'], studyId, 'patients')
+	# Extract Sample Data
 	if dictConfig['Sample Data']:
-		listSampleData, dictMappingPatientSample = retrieveAPIData(dictConfig['Sample Data'], studyId, 'samples', outputFileBiosample)
+		listSampleData, dictMappingPatientSample = retrieveAPIData(dictConfig['Sample Data'], studyId, 'samples')
 	# Extract Genomic Variants Data
 	listGenomicData = retrieveGenomicVariants(studyId)
-	writeGenomicsFile( listGenomicData)
-	writeIndividualSampleFile(listPatientData, listSampleData, dictMappingPatientSample)
+	writeGenomicsFile(listGenomicData, outputFileGenomicVariants)
+	writeSampleFile(listSampleData, dictMappingPatientSample, outputFileBiosample)
+	writeIndividualFile(listPatientData, outputFileIndividuals)
 
 
 if __name__ == '__main__':
