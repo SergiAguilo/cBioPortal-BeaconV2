@@ -188,11 +188,14 @@ def main():
 	dictMappingPatientSample = {}
 	# Extract Patient Data
 	if dictConfig['Patient Data']:
+		print('Retrieving Patient Data')
 		listPatientData, _ = retrieveAPIData(dictConfig['Patient Data'], studyId, 'patients')
 	# Extract Sample Data
 	if dictConfig['Sample Data']:
+		print('Retrieving Sample Data')
 		listSampleData, dictMappingPatientSample = retrieveAPIData(dictConfig['Sample Data'], studyId, 'samples')
 	# Extract Genomic Variants Data
+	print('Retrieving Genomic Variants Data')
 	listGenomicData = retrieveGenomicVariants(studyId)
 	writeGenomicsFile(listGenomicData, outputFileGenomicVariants)
 	writeSampleFile(listSampleData, dictMappingPatientSample, outputFileBiosample)
