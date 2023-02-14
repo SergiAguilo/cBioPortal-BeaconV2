@@ -9,6 +9,8 @@ configPath=sys.argv[1]
 # Read config.ini
 def readIni(configPath):
 	config = configparser.ConfigParser()
+	config.optionxform=str
+
 	config.read(configPath)
 	dictConfig = {}
 	for section in config.sections():
@@ -177,15 +179,16 @@ def main():
 	# Read config file
 	dictConfig = readIni(configPath)
 	# Study Id
-	studyId = dictConfig['Main Config']['studyid']
+	studyId = dictConfig['Main Config']['studyId']
 	# Output Files
-	outputFileIndividuals = dictConfig['Main Config']['outputindividuals']
-	outputFileBiosample = dictConfig['Main Config']['outputbiosamples']
-	outputFileGenomicVariants = dictConfig['Main Config']['outputgenomicvariants']
+	outputFileIndividuals = dictConfig['Main Config']['outputIndividuals']
+	outputFileBiosample = dictConfig['Main Config']['outputBiosamples']
+	outputFileGenomicVariants = dictConfig['Main Config']['outputGenomicVariants']
 	listPatientData = []
 	listSampleData = []
 	listGenomicData = []
 	dictMappingPatientSample = {}
+
 	# Extract Patient Data
 	if dictConfig['Patient Data']:
 		print('Retrieving Patient Data')
