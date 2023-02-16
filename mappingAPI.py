@@ -3,6 +3,8 @@ from random import sample
 import sys
 from urllib.request import urlopen
 import configparser
+import uuid
+import time
 
 configPath=sys.argv[1]
 
@@ -102,25 +104,45 @@ def writeGenomicsFile(listGenomicData, outputFileGenomicVariants):
 	# Genomic Variants file
 	for genomicData in listGenomicData:
 		dictGenomicData = {}
-		dictGenomicData['_position'] = {'start':[int(genomicData['startPosition'])],
-			 'startInteger':int(genomicData['startPosition']),
-			 'end':[int(genomicData['endPosition'])],
-			 'endInteger':int(genomicData['endPosition']),
-			 'refseqId': genomicData['chr'],
-			 'assemblyID': genomicData['ncbiBuild']}
+		# Position property not in specification but needed for Beacon RI API
+		dictGenomicData['position'] = {
+			'start':[int(genomicData['startPosition'])],
+			'startInteger':int(genomicData['startPosition']),
+			'end':[int(genomicData['endPosition'])],
+			'endInteger':int(genomicData['endPosition']),
+			'refseqId': genomicData['chr'],
+			'assemblyID': genomicData['ncbiBuild']
+			}
+		# Id creation and printing
+		# TO DO: Separate caseLevelData.id, variantInternalId
+		id = uuid.uuid1(clock_seq=int(time.time()*10000000)) # Create Unique Id based on the clock and hardware address
+		dictGenomicData['variantInternalId']: id
 		dictGenomicData['caseLevelData'] = [{'individualId': genomicData['patientId'], 'biosamplelId': genomicData['sampleId']}]
 		if 'mutationStatus' in genomicData:
 			dictGenomicData['caseLevelData'] += [{'alleleOrigin':{'label':genomicData['mutationStatus']}}]
 
-		dictGenomicData['variation'] = {'alternateBases': genomicData['variantAllele'],
-			'referenceBases': genomicData['referenceAllele'],
-			'location':{'interval': {'end': {'value':int(genomicData['startPosition']), 'type':'Number'},
-			 	'start':{'value': int(genomicData['endPosition']), 'type': 'Number'}}}
-			 }
+		dictGenomicData['variation'] = {
+				'alternateBases': genomicData['variantAllele'],
+				'referenceBases': genomicData['referenceAllele'],
+				'location':{
+					'type':'SequenceLocation',
+					'interval': {
+						'type': 'SequenceInterval',
+						'end': {
+							'value':int(genomicData['startPosition']),
+							'type':'Number'
+						},
+						'start':{
+							'value': int(genomicData['endPosition']),
+							'type': 'Number'
+						}
+					}
+				}
+			}
 		if 'mutationType' in genomicData:
-			dictGenomicData['variantLevelData'] = {'phenotypicEffects': {'category': genomicData['mutationType']}}
+			dictGenomicData['variantLevelData'] = {'phenotypicEffects': {'category':{'label':genomicData['mutationType']}}}
 		if 'proteinChange' in genomicData:
-			dictGenomicData['proteinHGVSIds'] = [genomicData['proteinChange']]
+			dictGenomicData['identifiers'] = {'proteinHGVSIds': [genomicData['proteinChange']]}
 		if 'entrezGeneId' in genomicData:
 			dictGenomicData['molecularAttributes'] = {'geneIds': [genomicData['entrezGeneId']]}
 		listDictGenomics.append(dictGenomicData)
@@ -151,7 +173,10 @@ def writeIndividualFile(listPatientData, outputFileIndividuals):
 			if patientVariable == 'patientId':
 				dictIndividualData['id'] = individualData['patientId']
 			else:
-
+				# if Age specification convert integer to iso8601duration
+				if 'diseases.ageOfOnset.age.iso8601duration' in patientVariable:
+					if individualData[patientVariable].isdigit():
+						individualData[patientVariable] = f"P{individualData[patientVariable]}Y"
 				dictIndividualData = add_branch(dictIndividualData, patientVariable.split("."), individualData[patientVariable])
 
 		listIndividualData.append(dictIndividualData)
@@ -165,8 +190,8 @@ def writeSampleFile(listSampleData, dictMappingPatientSample, outputFileBiosampl
 	for sampleData in listSampleData:
 		dictSampleData = {}
 		for sampleVariable in sampleData:
+			dictSampleData['id'] = sampleData['sampleId']
 			if sampleVariable == 'patientId':
-				dictSampleData['id'] = sampleData['sampleId']
 				dictSampleData['individualId'] = dictMappingPatientSample[sampleData['sampleId']]
 			else:
 				dictSampleData = add_branch(dictSampleData, sampleVariable.split("."), sampleData[sampleVariable])
