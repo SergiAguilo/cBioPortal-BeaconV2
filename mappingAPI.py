@@ -115,12 +115,14 @@ def writeGenomicsFile(listGenomicData, outputFileGenomicVariants):
 			}
 		# Id creation and printing
 		# TO DO: Separate caseLevelData.id, variantInternalId
-		id = uuid.uuid1(clock_seq=int(time.time()*10000000)) # Create Unique Id based on the clock and hardware address
-		dictGenomicData['variantInternalId']: id
-		dictGenomicData['caseLevelData'] = [{'individualId': genomicData['patientId'], 'biosamplelId': genomicData['sampleId']}]
+		id = str(uuid.uuid1(clock_seq=int(time.time()*10000000))) # Create Unique Id based on the clock and hardware address
+		dictGenomicData['variantInternalId'] = id
+		dictGenomicData['caseLevelData'] = []
+		dictCaseLevelData = {'individualId': genomicData['patientId'], 'biosamplelId': genomicData['sampleId']}
 		if 'mutationStatus' in genomicData:
-			dictGenomicData['caseLevelData'] += [{'alleleOrigin':{'label':genomicData['mutationStatus']}}]
-
+			alleleOrigin = {'alleleOrigin':{'label':genomicData['mutationStatus']}}
+			dictCaseLevelData = { **dictCaseLevelData, **alleleOrigin}
+		dictGenomicData['caseLevelData'].append(dictCaseLevelData)
 		dictGenomicData['variation'] = {
 				'alternateBases': genomicData['variantAllele'],
 				'referenceBases': genomicData['referenceAllele'],
@@ -140,7 +142,7 @@ def writeGenomicsFile(listGenomicData, outputFileGenomicVariants):
 				}
 			}
 		if 'mutationType' in genomicData:
-			dictGenomicData['variantLevelData'] = {'phenotypicEffects': {'category':{'label':genomicData['mutationType']}}}
+			dictGenomicData['variantLevelData'] ={'phenotypicEffects':[{'category':{'label':genomicData['mutationType']}}]}
 		if 'proteinChange' in genomicData:
 			dictGenomicData['identifiers'] = {'proteinHGVSIds': [genomicData['proteinChange']]}
 		if 'entrezGeneId' in genomicData:
@@ -174,11 +176,18 @@ def writeIndividualFile(listPatientData, outputFileIndividuals):
 				dictIndividualData['id'] = individualData['patientId']
 			else:
 				# if Age specification convert integer to iso8601duration
-				if 'diseases.ageOfOnset.age.iso8601duration' in patientVariable:
-					if individualData[patientVariable].isdigit():
-						individualData[patientVariable] = f"P{individualData[patientVariable]}Y"
-				dictIndividualData = add_branch(dictIndividualData, patientVariable.split("."), individualData[patientVariable])
-
+				variableSplit = patientVariable.split(".")
+				if 'diseases' in variableSplit[0]:
+					dictIndividualData['diseases'] = []
+					if 'diseases.ageOfOnset.age.iso8601duration' in patientVariable:
+						if individualData[patientVariable].isdigit():
+							individualData[patientVariable] = f"P{individualData[patientVariable]}Y"
+					emptyDict={}
+					diseaseBranch= add_branch(emptyDict, variableSplit[1:], individualData[patientVariable])
+					dictIndividualData['diseases'].append(diseaseBranch)
+				else:
+					variableDict = add_branch(dictIndividualData, variableSplit, individualData[patientVariable])
+					dictIndividualData = {**dictIndividualData, **variableDict}
 		listIndividualData.append(dictIndividualData)
 		f = open(outputFileIndividuals, 'w')
 		f.write(json.dumps(listIndividualData, indent=1))
@@ -191,14 +200,23 @@ def writeSampleFile(listSampleData, dictMappingPatientSample, outputFileBiosampl
 		dictSampleData = {}
 		for sampleVariable in sampleData:
 			dictSampleData['id'] = sampleData['sampleId']
-			if sampleVariable == 'patientId':
+			if 'patientId' in sampleVariable:
 				dictSampleData['individualId'] = dictMappingPatientSample[sampleData['sampleId']]
+			variableSplit = sampleVariable.split(".")
+			# TO DO: List of variables and type of variable (array, object, string, etc)
+			# Depend on the type, it writes the corresponding characters ([], {}, "", etc)
+			if 'phenotypicFeatures' in variableSplit[0]:
+				dictSampleData['phenotypicFeatures'] = []
+				emptyDict={}
+				diseaseBranch= add_branch(emptyDict, variableSplit[1:], sampleData[sampleVariable])
+				dictSampleData['phenotypicFeatures'].append(diseaseBranch)
 			else:
-				dictSampleData = add_branch(dictSampleData, sampleVariable.split("."), sampleData[sampleVariable])
+				variableDict = add_branch(dictSampleData, variableSplit, sampleData[sampleVariable])
+				dictSampleData = {**dictSampleData, **variableDict}
 		listDictSampleData.append(dictSampleData)
-	f = open(outputFileBiosample, 'w')
-	f.write(json.dumps(listDictSampleData, indent=1))
-	f.close()
+		f = open(outputFileBiosample, 'w')
+		f.write(json.dumps(listDictSampleData, indent=1))
+		f.close()
 
 def main():
 	# Read config file
@@ -225,9 +243,11 @@ def main():
 	# Extract Genomic Variants Data
 	print('Retrieving Genomic Variants Data')
 	listGenomicData = retrieveGenomicVariants(studyId)
+	print("Writting output files")
 	writeGenomicsFile(listGenomicData, outputFileGenomicVariants)
-	writeSampleFile(listSampleData, dictMappingPatientSample, outputFileBiosample)
 	writeIndividualFile(listPatientData, outputFileIndividuals)
+	writeSampleFile(listSampleData, dictMappingPatientSample, outputFileBiosample)
+	
 
 
 if __name__ == '__main__':
