@@ -7,7 +7,7 @@ Before running the script check [basicConfigFile.ini](basicConfigFile.ini). You 
 - Usage
 
 ```
-python3 mappingAPI.py basicConfigFile.ini
+python3 cBioPortalBeaconMapping.py basicConfigFile.ini
 ```
 
 This script create Beacon Friendly Format (BFF) files compatible to the Reference Implementation BeaconV2 API.
