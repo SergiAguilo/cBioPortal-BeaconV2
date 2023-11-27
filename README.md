@@ -16,7 +16,7 @@ This script create Beacon Friendly Format (BFF) files compatible to the Referenc
 
 ## Light a Beacon (beta version)
 
-For creating a BeaconV2 working instance, you can use the (Reference Implementation)[https://github.com/EGA-archive/beacon2-ri-api] developed at the Centre for Genomic Regulation (CRG). 
+For creating a BeaconV2 working instance, you can use the [Reference Implementation](https://github.com/EGA-archive/beacon2-ri-api) developed at the Centre for Genomic Regulation (CRG). 
 
 # License
 
