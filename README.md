@@ -1,8 +1,10 @@
 # cBioPortal-BeaconV2
 
-Script to map cBioPortal data to Beacon v2
+Script to map cBioPortal data to Beacon v2.
 
 Before running the script check [basicConfigFile.ini](basicConfigFile.ini). You must put your Study ID in the field `studyId`. Then, change your clinical data fields to match the ones in your study. If not, the script will map to the base fields given by cBioPortal.
+
+To map the Individual and Biosample schema it is recommended to use the Beacon v2 schema from the [main repository](https://github.com/SergiAguilo/cBioPortal-BeaconV2). 
 
 - Usage
 
@@ -14,57 +16,16 @@ This script create Beacon Friendly Format (BFF) files compatible to the Referenc
 
 ## Light a Beacon (beta version)
 
-For creating a BeaconV2 working instance we are going to use the Reference Implementation developed at the Centre for Genomic Regulation (CRG). The following code is based on this [repo](https://github.com/MauricioMoldes/deploy_beacon_v2_reference_implementation).
+For creating a BeaconV2 working instance, you can use the (Reference Implementation)[https://github.com/EGA-archive/beacon2-ri-api] developed at the Centre for Genomic Regulation (CRG). 
 
-### Requirements
+# License
 
-* Open ports 5050, 8080, 8081, 27017 
-* Install <a href="https://docs.docker.com/compose/install/" target="_blank">docker-compose</a>
-* Install <a href="https://www.mongodb.com/docs/database-tools/installation/installation/" target="_blank">mongoimport</a>. Or run `sudo apt install mongodb-org-tools`.
+* GNU AFFERO GENERAL PUBLIC LICENSE Version 3. Ver [`LICENSE.md`](LICENSE.md).
+* [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-brightgreen)](https://www.gnu.org/licenses/gpl-3.0.en.html) 
 
-### Deploying the beacon
+# Acknowlegment
 
-- Clone API repo:
+This repo is a discarded work from in the [IMPaCT-Data](https://impact-data.bsc.es/) project, with the support of Instituto de Salud Carlos III and the Barcelona SuperComputing Center.
 
-```
-git clone https://github.com/MauricioMoldes/beacon2-ri-api
-cd beacon2-ri-api/deploy
-```
+The original on-the-fly work can be found in the [IMPaCT-Data repo](https://gitlab.bsc.es/impact-data/impd-beacon_cbioportal).
 
-- Start MongoDB container:
-
-```
-docker-compose up -d db
-```
-
-- Import the BFF data created to MongoDB:
-
-```
-mongoimport --jsonArray --uri "mongodb://root:example@127.0.0.1:27017/beacon?authSource=admin" --file /path/to/biosamples.json --collection biosamples
-mongoimport --jsonArray --uri "mongodb://root:example@127.0.0.1:27017/beacon?authSource=admin" --file /path/to/individuals.json --collection individuals
-mongoimport --jsonArray --uri "mongodb://root:example@127.0.0.1:27017/beacon?authSource=admin" --file /path/to/genomicVariants.json --collection genomicVariations 
-```
-
-**Note**
-Remember to put the correct path of your files in the command line.
-
-- Start Beacon containers:
-
-```
-docker-compose up -d mongo-express
-docker-compose up -d beacon
-```
-
-- Start Beacon UI container:
-
-```
-docker-compose up -d training-ui
-```
-
-### Usage
-
-Access the beacon reference implementation on your localhost: 
-
- * http://localhost:5050/api/ - beacon-api
- * http://localhost:8080/ - training-ui
- * http://localhost:8081 - mongo-express
